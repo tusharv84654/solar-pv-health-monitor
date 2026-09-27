@@ -23,7 +23,7 @@ A real-time IoT and Machine Learning telemetry pipeline designed to monitor phot
          ▼ (WSS Broadcast /ws/live)
 [ Mobile App       ]  Flutter Client (Real-time Radial Gauges)
 
-✨ Features
+##✨ Features
 
 Real-time Telemetry Ingestion: Processes voltage (V), current (mA), irradiance (Lux), and panel temperature (°C) at sub-second intervals.
 
@@ -43,7 +43,7 @@ Bidirectional WebSocket Feed: Instantly streams processed diagnostic states dire
 
 Built-in Scenario Simulation: Dedicated endpoints allowing engineers to simulate panel conditions without waiting for specific weather events.
 
-🛠️ Tech Stack
+## 🛠️ Tech Stack
 
 Backend Framework: FastAPI, Uvicorn (ASGI)
 
