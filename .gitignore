@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.db
+.env
+solar_mobile_app/
+venv/
+__pycache__/
+*.db
+.env

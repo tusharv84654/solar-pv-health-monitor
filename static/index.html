@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Solar PV Dust Predictor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center gap-3">
+      <div class="h-3.5 w-3.5 rounded-full bg-emerald-500 animate-ping"></div>
+      <h1 class="text-xl font-bold tracking-tight text-white">Smart Solar PV Dust Predictor</h1>
+    </div>
+    <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
+      <span id="connection-status" class="px-2.5 py-1 rounded bg-slate-800 text-amber-400 border border-slate-700">Connecting...</span>
+      <span id="last-updated">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+    <div id="diagnostic-banner" class="rounded-xl p-5 border flex items-center justify-between transition-all duration-300 bg-slate-900 border-slate-800">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Diagnostic State</p>
+        <h2 id="badge-title" class="text-2xl font-black mt-1 text-slate-200">Awaiting Telemetry...</h2>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+        <p class="text-xs font-medium text-slate-400">Actual Power Output</p>
+        <p class="text-2xl font-bold mt-1 text-sky-400" id="metric-p-actual">0.00 <span class="text-sm font-normal">W</span></p>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+        <p class="text-xs font-medium text-slate-400">Clean Theoretical Power</p>
+        <p class="text-2xl font-bold mt-1 text-emerald-400" id="metric-p-predicted">0.00 <span class="text-sm font-normal">W</span></p>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+        <p class="text-xs font-medium text-slate-400">Degradation Loss</p>
+        <p class="text-2xl font-bold mt-1 text-rose-400" id="metric-loss">0.0 <span class="text-sm font-normal">%</span></p>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+        <p class="text-xs font-medium text-slate-400">Sensors</p>
+        <p class="text-lg font-bold mt-1 text-amber-300">
+          <span id="metric-lux">0</span> lx | <span id="metric-temp">0</span>°C
+        </p>
+        <span class="text-xs text-slate-500">Voltage: <span id="metric-voltage">0.00</span> V</span>
+      </div>
+    </div>
+
+    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-xl">
+      <h3 class="text-sm font-semibold text-slate-300 mb-4">Power Comparison (Predicted vs Actual)</h3>
+      <div class="h-64 w-full">
+        <canvas id="telemetryChart"></canvas>
+      </div>
+    </div>
+
+    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-xl">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Test Scenario Injector</p>
+      <div class="flex flex-wrap gap-3">
+        <button onclick="triggerScenario('clean')" class="px-3.5 py-2 bg-emerald-950 hover:bg-emerald-900 border border-emerald-600/50 text-emerald-300 text-sm rounded-lg transition font-medium">☀️ Clean Sunlight</button>
+        <button onclick="triggerScenario('dust')" class="px-3.5 py-2 bg-rose-950 hover:bg-rose-900 border border-rose-600/50 text-rose-300 text-sm rounded-lg transition font-medium">💨 Dust Accumulation (-35%)</button>
+        <button onclick="triggerScenario('heat')" class="px-3.5 py-2 bg-orange-950 hover:bg-orange-900 border border-orange-600/50 text-orange-300 text-sm rounded-lg transition font-medium">🔥 43°C Heat Derating</button>
+        <button onclick="triggerScenario('hardware_fault')" class="px-3.5 py-2 bg-amber-950 hover:bg-amber-900 border border-amber-600/50 text-amber-300 text-sm rounded-lg transition font-medium">⚠️ Hardware Cell Fault</button>
+        <button onclick="triggerScenario('night')" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-sm rounded-lg transition font-medium">🌙 Night / Idle</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const ctx = document.getElementById('telemetryChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Clean Theoretical (W)', data: [], borderColor: '#34d399', tension: 0.3, borderWidth: 2 },
+          { label: 'Actual Measured (W)', data: [], borderColor: '#38bdf8', tension: 0.3, borderWidth: 2 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' } },
+          y: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' }, beginAtZero: true }
+        }
+      }
+    });
+
+    function updateUI(record) {
+      if (!record || !record.status) return;
+      document.getElementById('metric-p-actual').innerHTML = `${record.p_actual} <span class="text-sm font-normal">W</span>`;
+      document.getElementById('metric-p-predicted').innerHTML = `${record.p_predicted} <span class="text-sm font-normal">W</span>`;
+      document.getElementById('metric-loss').innerHTML = `${record.loss_percentage} <span class="text-sm font-normal">%</span>`;
+      document.getElementById('metric-lux').innerText = record.lux;
+      document.getElementById('metric-temp').innerText = record.temperature;
+      document.getElementById('metric-voltage').innerText = record.voltage;
+      document.getElementById('last-updated').innerText = record.timestamp || new Date().toLocaleTimeString();
+
+      const banner = document.getElementById('diagnostic-banner');
+      document.getElementById('badge-title').innerText = record.badge;
+      banner.className = "rounded-xl p-5 border flex items-center justify-between transition-all duration-300";
+      if (record.color === 'green') banner.classList.add('bg-emerald-950/70', 'border-emerald-600', 'text-emerald-300');
+      else if (record.color === 'red') banner.classList.add('bg-rose-950/70', 'border-rose-600', 'text-rose-300');
+      else if (record.color === 'amber') banner.classList.add('bg-amber-950/70', 'border-amber-600', 'text-amber-300');
+      else banner.classList.add('bg-slate-900', 'border-slate-800', 'text-slate-400');
+
+      if (chart.data.labels.length >= 20) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
+      }
+      chart.data.labels.push(record.timestamp || new Date().toLocaleTimeString());
+      chart.data.datasets[0].data.push(record.p_predicted);
+      chart.data.datasets[1].data.push(record.p_actual);
+      chart.update();
+    }
+
+    fetch('/api/telemetry/history?limit=20')
+      .then(res => res.json())
+      .then(history => history.forEach(item => updateUI(item)));
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+    const statusEl = document.getElementById('connection-status');
+
+    ws.onopen = () => {
+      statusEl.innerText = "STREAM LIVE";
+      statusEl.className = "px-2.5 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800";
+    };
+    ws.onmessage = (e) => updateUI(JSON.parse(e.data));
+    ws.onclose = () => {
+      statusEl.innerText = "DISCONNECTED";
+      statusEl.className = "px-2.5 py-1 rounded bg-rose-950 text-rose-400 border border-rose-800";
+    };
+
+    async function triggerScenario(scenario) {
+      await fetch('/api/telemetry/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario })
+      });
+    }
+  </script>
+</body>
+</html>
